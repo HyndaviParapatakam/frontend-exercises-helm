@@ -22,3 +22,6 @@ ingress:
     - secretName: frontend-tls
       hosts:
         - your-domain.com
+aws:
+  secretName: aws-credentials
+  configMapName: s3-config
