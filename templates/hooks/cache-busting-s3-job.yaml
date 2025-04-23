@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "frontend-exercises.fullname" . }}-s3-cache-busting
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: s3-buster
+          image: amazon/aws-cli:2.13.28
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "📦 Uploading cache-busted assets to S3..."
+              aws s3 sync /assets "s3://$S3_BUCKET" --delete
+
+              echo "🚀 Invalidating CloudFront cache..."
+              aws cloudfront create-invalidation \
+                --distribution-id "$CLOUDFRONT_DIST_ID" \
+                --paths "/*"
+
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: accessKeyId
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: secretAccessKey
+            - name: S3_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: s3-config
+                  key: bucket
+            - name: CLOUDFRONT_DIST_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: s3-config
+                  key: distributionId
+      restartPolicy: Never
+  backoffLimit: 1

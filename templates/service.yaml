@@ -1,0 +1,13 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "frontend-exercises.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 3001
+  selector:
+    app: {{ include "frontend-exercises.fullname" . }}
+{{- end }}

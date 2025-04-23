@@ -1,0 +1,23 @@
+image:
+  repository: hyndav/frontend-exercises
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: your-domain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - your-domain.com
