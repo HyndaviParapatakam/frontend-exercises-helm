@@ -6,6 +6,7 @@ image:
 service:
   type: LoadBalancer
   port: 80
+  enabled: true
 
 ingress:
   enabled: true
