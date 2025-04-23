@@ -1,48 +1,68 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "frontend-exercises.fullname" . }}-s3-cache-busting
+  name: {{ include "frontend-exercises.fullname" . }}-s3-upload
+  labels:
+    {{- include "frontend-exercises.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": post-upgrade
     "helm.sh/hook-weight": "1"
-    "helm.sh/hook-delete-policy": hook-succeeded
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
 spec:
+  activeDeadlineSeconds: 600
   template:
     spec:
       containers:
-        - name: s3-buster
-          image: amazon/aws-cli:2.13.28
+        - name: upload-frontend-exercises
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/bin/sh", "-c"]
           args:
             - |
-              echo "📦 Uploading cache-busted assets to S3..."
-              aws s3 sync /assets "s3://$S3_BUCKET" --delete
+              echo "📦 Uploading build assets to S3..."
+              aws configure set default.s3.max_concurrent_requests 1
+              if [ -d /app/build ]; then
+                aws s3 sync /app/build s3://$S3_BUCKET --delete --no-progress
+              else
+                echo "⚠️ /app/build does not exist. Skipping S3 upload."
+              fi
 
               echo "🚀 Invalidating CloudFront cache..."
-              aws cloudfront create-invalidation \
+              INVALIDATION_ID=$(aws cloudfront create-invalidation \
                 --distribution-id "$CLOUDFRONT_DIST_ID" \
-                --paths "/*"
+                --paths "/*" \
+                --query Invalidation.Id \
+                --output text)
+              echo "Invalidation ID: $INVALIDATION_ID"
+              echo "Upload and invalidation completed ✅"
 
           env:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: aws-credentials
+                  name: {{ .Values.aws.secretName }}
                   key: accessKeyId
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: aws-credentials
+                  name: {{ .Values.aws.secretName }}
                   key: secretAccessKey
             - name: S3_BUCKET
               valueFrom:
                 configMapKeyRef:
-                  name: s3-config
+                  name: {{ .Values.aws.configMapName }}
                   key: bucket
             - name: CLOUDFRONT_DIST_ID
               valueFrom:
                 configMapKeyRef:
-                  name: s3-config
+                  name: {{ .Values.aws.configMapName }}
                   key: distributionId
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 512Mi
       restartPolicy: Never
-  backoffLimit: 1
+  backoffLimit: 0
